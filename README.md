@@ -47,44 +47,55 @@ pmsettings_IST/
 
 ## Usage
 
+All commands are run from the `scripts/` directory. Bare file names are automatically resolved to the correct project directories (`input/` for source files, `config/` for configs), so no relative paths are needed.
+
+```bash
+cd scripts
+```
+
 ### Step 1: Generate Configuration
 
 Scan SMELT fitting folders and auto-match to IST modes:
 
 ```bash
-python scripts/generate_smelt_config.py -o config/smelt_update_config.json
+python generate_smelt_config.py --ist-base ist_settings.pm --xlsx IST_Modes_Support.xlsx -o smelt_update_config.json
+```
+
+All arguments are optional — defaults point to the standard input files. The simplest invocation:
+
+```bash
+python generate_smelt_config.py -o smelt_update_config.json
 ```
 
 Review the generated JSON and verify `ist_modes[]` for each entry.
 
-### Step 2: Apply Coefficients
-
-Update the `.pm` file with SMELT coefficients:
+### Step 2: Dry Run (no files written, just shows plan)
 
 ```bash
-python scripts/update_ist_coefficients.py --config config/smelt_update_config.json
+python update_ist_coefficients.py --config smelt_update_config.json --dry-run
+```
+
+### Step 3: Preview (Excel only, no .pm)
+
+```bash
+python update_ist_coefficients.py --config smelt_update_config.json --preview
+```
+
+### Step 4: Apply with verbose output
+
+```bash
+python update_ist_coefficients.py --config smelt_update_config.json --verbose
 ```
 
 #### Options
 
 | Flag | Description |
 |------|-------------|
-| `--config PATH` | Path to the smelt_update_config.json |
-| `--dry-run` | Preview changes without writing output files |
+| `--config NAME` | Config file name (auto-resolves from `config/`) or full path |
+| `--dry-run` | Show update plan without writing any output files |
+| `--preview` | Generate Excel preview only (no `.pm` output) |
 | `--diff` | Show unified diff of changes (works with `--dry-run`) |
 | `-v, --verbose` | Enable debug-level logging |
-
-#### Examples
-
-Preview what would change:
-```bash
-python scripts/update_ist_coefficients.py --config config/smelt_update_config.json --dry-run --diff -v
-```
-
-Apply and write output:
-```bash
-python scripts/update_ist_coefficients.py --config config/smelt_update_config.json
-```
 
 Output is written to `output/YYYYMMDD_HHMMSS/` with timestamped directories.
 
