@@ -26,7 +26,9 @@ pmsettings_IST/
 ├── input/
 │   ├── ist_settings.pm             # Base IST settings file (source of truth)
 │   ├── IST_Modes_Support.xlsx      # Mode mapping reference spreadsheet
-│   └── IST_MATHS/SMELT_fitting/    # SMELT coefficient CSV files per rail/mode
+│   ├── IST_MATHS/SMELT_fitting/    # MATHS-IST SMELT output folders (test_per_rail)
+│   ├── IST_RIST/SMELT_fitting/     # RIST SMELT output folders (test_per_rail)
+│   └── IST_RIST_Adaptive/SMELT_fitting/  # RIST-Adaptive SMELT output folders (test_per_rail)
 ├── output/                         # Timestamped output directories
 │   └── YYYYMMDD_HHMMSS/
 │       ├── ist_settings.pm         # Updated settings file
