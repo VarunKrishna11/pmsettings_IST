@@ -1,0 +1,189 @@
+{
+  "default": {
+    "family": "MATHS-IST",
+    "configs": [
+      "GR100-Engineering",
+      "GR100-Product"
+    ]
+  },
+  "mappings": [
+    {
+      "folder_base": "GB100_FTM_P0H_HT_MSVDD_Vmin",
+      "ist_mode": "",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "candidates": [
+        "BaseFTM2CLK_P0H_HT",
+        "BaseFTM_P0H_HT_Vmax"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_FTM_P0H_HT_NVVDD_Vmin",
+      "ist_mode": "",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "candidates": [
+        "BaseFTM2CLK_P0H_HT",
+        "BaseFTM_P0H_HT_Vmax"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_FTM_P0L1800_MSVDD_Vmin",
+      "ist_mode": "BaseFTM2CLK_P0L",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_FTM_P0L1800_NVVDD_Vmin",
+      "ist_mode": "BaseFTM2CLK_P0L",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_FTM_P0L_MSVDD_Vmin",
+      "ist_mode": "BaseFTM2CLK_P0L",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "auto_score": 6
+    },
+    {
+      "folder_base": "GB100_FTM_P0L_NVVDD_Vmin",
+      "ist_mode": "BaseFTM2CLK_P0L",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "auto_score": 6
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0H_HT_MSVDD_Vmin",
+      "ist_mode": "",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "candidates": [
+        "MBIST_P0H_HT",
+        "MBIST_P0H_HT_Vmax"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0H_HT_NVVDD_Vmin",
+      "ist_mode": "",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "candidates": [
+        "MBIST_P0H_HT",
+        "MBIST_P0H_HT_Vmax"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0L1800_MSVDD_Vmin",
+      "ist_mode": "MBIST_P0L",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0L1800_NVVDD_Vmin",
+      "ist_mode": "MBIST_P0L",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0M_HT_MSVDD_Vmin",
+      "ist_mode": "MBIST_P0M_HT",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0M_HT_NVVDD_Vmin",
+      "ist_mode": "MBIST_P0M_HT",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_SDD_P0H_HT_MSVDD_Vmin",
+      "ist_mode": "SDD_P0H_HT",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_SDD_P0H_HT_NVVDD_Vmin",
+      "ist_mode": "SDD_P0H_HT",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_SDD_P0L1800_MSVDD_Vmin",
+      "ist_mode": "SDD_P0L",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_SDD_P0L1800_NVVDD_Vmin",
+      "ist_mode": "SDD_P0L",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "auto_score": 8
+    },
+    {
+      "folder_base": "GB100_SDD_P0L_MSVDD_Vmin",
+      "ist_mode": "SDD_P0L",
+      "voltage_domains": [
+        "MSVDDI_0",
+        "MSVDDI_1"
+      ],
+      "auto_score": 6
+    },
+    {
+      "folder_base": "GB100_SDD_P0L_NVVDD_Vmin",
+      "ist_mode": "SDD_P0L",
+      "voltage_domains": [
+        "NVVDDI_0",
+        "NVVDDI_1"
+      ],
+      "auto_score": 6
+    }
+  ]
+}

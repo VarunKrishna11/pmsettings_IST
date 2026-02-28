@@ -1,0 +1,44 @@
+{
+    "chip": [
+        {
+            "func": "chips.Custom",
+            "kwargs": {
+                "csv": {
+                    "func": "utils.joinroot",
+                    "args": [
+                        "data/GB100_MBIST_PLL_P0H_HT_NVVDD_Vmin.csv"
+                    ]
+                },
+                "name": "GB100"
+            }
+        }
+    ],
+    "model": [
+        {
+            "func": "models.polys.QuadraticVMin",
+            "kwargs": {
+                "proc": "Speedo",
+                "volt": "Vmin",
+				"temp": "Temp"
+				}
+        }
+    ],
+   "pipe": [
+        {
+            "func": "pipes.Pipe",
+            "args": [
+                {
+                    "func": "pipes.Only",
+                    "kwargs": {
+                        "label": "valid",
+                        "values": [
+                            "good"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
+
+

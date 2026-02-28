@@ -1,0 +1,169 @@
+{
+  "_description": "Configuration for update_ist_coefficients.py",
+  "_usage": [
+    "1. Review smelt_entries[].ist_modes - fill in any empty/ambiguous ones",
+    "2. Optionally add user_groups[] to merge modes into shared VFEs",
+    "3. Run: python scripts/update_ist_coefficients.py --config <this_file>"
+  ],
+  "inputs": {
+    "ist_base": "../input/ist_settings.pm",
+    "smelt_root": "../input/SMELT_fitting",
+    "xlsx": "../input/IST_Modes_Support.xlsx"
+  },
+  "output": "ist_settings.pm",
+  "target": {
+    "configs": [
+      "GR100-Engineering",
+      "GR102-Engineering",
+      "GR100-Product",
+      "GR102-Product"
+    ],
+    "family": "MATHS-IST"
+  },
+  "smelt_entries": [
+    {
+      "folder_base": "GB100_FTM_P0H_HT_MSVDD_Vmin",
+      "ist_modes": [
+        "BaseFTM2CLK_P0H_HT"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: BaseFTM2CLK_P0H_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_FTM_P0H_HT_NVVDD_Vmin",
+      "ist_modes": [
+        "BaseFTM2CLK_P0H_HT"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: BaseFTM2CLK_P0H_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_FTM_P0L1800_MSVDD_Vmin",
+      "ist_modes": [
+        "BaseFTM2CLK_P0L"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: BaseFTM2CLK_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_FTM_P0L1800_NVVDD_Vmin",
+      "ist_modes": [
+        "BaseFTM2CLK_P0L"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: BaseFTM2CLK_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_FTM_P0L_MSVDD_Vmin",
+      "ist_modes": [
+        "BaseFTM2CLK_P0L"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: BaseFTM2CLK_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_FTM_P0L_NVVDD_Vmin",
+      "ist_modes": [
+        "BaseFTM2CLK_P0L"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: BaseFTM2CLK_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0H_HT_MSVDD_Vmin",
+      "ist_modes": [
+        "MBIST_P0H_HT"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: MBIST_P0H_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0H_HT_NVVDD_Vmin",
+      "ist_modes": [
+        "MBIST_P0H_HT"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: MBIST_P0H_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0L1800_MSVDD_Vmin",
+      "ist_modes": [
+        "MBIST_P0L"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: MBIST_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0L1800_NVVDD_Vmin",
+      "ist_modes": [
+        "MBIST_P0L"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: MBIST_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0M_HT_MSVDD_Vmin",
+      "ist_modes": [
+        "MBIST_P0M_HT"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: MBIST_P0M_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_MBIST_PLL_P0M_HT_NVVDD_Vmin",
+      "ist_modes": [
+        "MBIST_P0M_HT"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: MBIST_P0M_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_SDD_P0H_HT_MSVDD_Vmin",
+      "ist_modes": [
+        "SDD_P0H_HT"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: SDD_P0H_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_SDD_P0H_HT_NVVDD_Vmin",
+      "ist_modes": [
+        "SDD_P0H_HT"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: SDD_P0H_HT (score=8)"
+    },
+    {
+      "folder_base": "GB100_SDD_P0L1800_MSVDD_Vmin",
+      "ist_modes": [
+        "SDD_P0L"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: SDD_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_SDD_P0L1800_NVVDD_Vmin",
+      "ist_modes": [
+        "SDD_P0L"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: SDD_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_SDD_P0L_MSVDD_Vmin",
+      "ist_modes": [
+        "SDD_P0L"
+      ],
+      "note": "Auto-detected rail: MSVDD | best match: SDD_P0L (score=6)"
+    },
+    {
+      "folder_base": "GB100_SDD_P0L_NVVDD_Vmin",
+      "ist_modes": [
+        "SDD_P0L"
+      ],
+      "note": "Auto-detected rail: NVVDD | best match: SDD_P0L (score=6)"
+    }
+  ],
+  "_user_groups_help": [
+    "user_groups[] lets you merge multiple ISTModeNames into one shared VFE.",
+    "By default (empty), each SMELT-covered mode gets its own VFE per rail.",
+    "",
+    "Scenario 1 - Group FTM and SDD at same pstate:",
+    "  { \"ist_modes\": [\"BaseFTM2CLK_P0L\", \"SDD_P0L\"] }",
+    "  -> Instead of 2 VFEs per rail, they share 1 VFE with same coefficients.",
+    "",
+    "Scenario 2 - Group all MBIST pstates together:",
+    "  { \"ist_modes\": [\"MBIST_P0L\", \"MBIST_P0M_HT\", \"MBIST_P0H_HT\"] }",
+    "  -> Instead of 3 MBIST VFEs per rail, they share 1 VFE per rail.",
+    "",
+    "Scenario 3 - Pull non-SMELT modes into a SMELT group:",
+    "  { \"ist_modes\": [\"BaseFTM2CLK_P0L\", \"FseqRAMSeq_P0L\", \"Bridging_P0L\"] }",
+    "  -> FseqRAMSeq_P0L, Bridging_P0L don't have SMELT data but get pulled",
+    "     from residual VFE into BaseFTM2CLK_P0L's VFE, sharing its SMELT coefficients."
+  ],
+  "user_groups": []
+}
