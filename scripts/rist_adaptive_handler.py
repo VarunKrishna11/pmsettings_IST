@@ -19,11 +19,14 @@ Structure of each VFE's Equation array:
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
 from ist_utils import classify_rail
+
+logger = logging.getLogger(__name__)
 
 FAMILY = 'RIST-Adaptive'
 
@@ -68,13 +71,13 @@ def _find_fallback_coeffs(raw_text: str) -> Tuple[List[str], str]:
 
 def plan_new_vfes(
     existing_vfes: List[Dict[str, Any]],
-    smelt_map: Dict[Tuple[str, str], List[str]],
+    smelt_map: Dict[Tuple[str, str], Any],
     user_groups: List[Dict] = None,
-    verbose: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Plan the new VFE structure for a config's RIST-Adaptive section.
 
+    smelt_map values are dicts: {'coeffs': [...], 'folder_base': '...'}.
     Only the fallback polynomial (inside the FALSE Comparison branch)
     gets SMELT coefficients. All other equation parts are preserved.
     """
@@ -97,7 +100,7 @@ def plan_new_vfes(
         fallback_coeffs, _ = _find_fallback_coeffs(raw_text)
 
         remaining: List[str] = []
-        updated: Dict[str, List[str]] = {}
+        updated: Dict[str, Dict[str, Any]] = {}
         for mode in all_modes:
             key = (mode, rail)
             if key in smelt_map:
@@ -116,18 +119,21 @@ def plan_new_vfes(
                 'equation_type': 'comparison',
                 'raw_text': raw_text,
             })
-            if verbose:
-                print(f"    RIST-Adaptive VFE kept original: {len(all_modes)} modes on {rail}")
+            logger.debug("RIST-Adaptive VFE kept original: %d modes on %s", len(all_modes), rail)
             continue
 
         coeff_groups: Dict[Any, List[str]] = defaultdict(list)
-        for mode, coeffs in updated.items():
+        folder_for_group: Dict[Any, str] = {}
+        for mode, entry in updated.items():
+            coeffs = entry['coeffs']
             group = mode_to_group.get(mode)
             if group:
                 group_key = (tuple(coeffs), group)
             else:
                 group_key = (tuple(coeffs), frozenset([mode]))
             coeff_groups[group_key].append(mode)
+            if group_key not in folder_for_group:
+                folder_for_group[group_key] = entry['folder_base']
 
         for (coeffs_tuple, group_set), group_modes in coeff_groups.items():
             final_modes = list(group_modes)
@@ -150,12 +156,12 @@ def plan_new_vfes(
                 'variable': vfe['variable'],
                 'coeffs': list(coeffs_tuple),
                 'source': 'smelt',
+                'smelt_folder': folder_for_group[(coeffs_tuple, group_set)],
                 'equation_type': 'comparison',
                 'raw_text': raw_text,
                 'fallback_coeffs': list(coeffs_tuple),
             })
-            if verbose:
-                print(f"    RIST-Adaptive VFE SMELT: modes={final_modes} rail={rail}")
+            logger.debug("RIST-Adaptive VFE SMELT: modes=%s rail=%s", final_modes, rail)
 
         if remaining:
             new_vfes.append({
@@ -168,8 +174,7 @@ def plan_new_vfes(
                 'equation_type': 'comparison',
                 'raw_text': raw_text,
             })
-            if verbose:
-                print(f"    RIST-Adaptive VFE residual: {len(remaining)} modes on {rail}")
+            logger.debug("RIST-Adaptive VFE residual: %d modes on %s", len(remaining), rail)
 
     return new_vfes
 
@@ -304,7 +309,11 @@ def generate_vfe_block(vfe_id: str, vfe: Dict[str, Any], indent: str) -> str:
     )
 
     # Comparison #2: T0_Vmin < 0.0001 -> TRUE: fallback polynomial
-    smelt_tag = '#SMELT ' if source == 'smelt' else ''
+    smelt_folder = vfe.get('smelt_folder', '')
+    if source == 'smelt':
+        smelt_tag = f'#SMELT({smelt_folder}) ' if smelt_folder else '#SMELT '
+    else:
+        smelt_tag = ''
     fb_var = _extract_fallback_variable(raw_text)
     lines += _generate_comparison_block(
         criteria_var='T0_Vmin',
@@ -345,6 +354,13 @@ def generate_vfe_block(vfe_id: str, vfe: Dict[str, Any], indent: str) -> str:
 def _extract_preserved_equations(raw_text: str) -> Tuple[List[str], List[str], List[str], List[str]]:
     """
     Extract the preserved (non-SMELT) equation coefficients from raw VFE text.
+
+    Uses sequential parsing of the 4-entry Equation array:
+      Entry [0]: Comparison (T0_Vmin > 0.0001) -> extract T0_Vmin + T0_Temp coeffs
+      Entry [1]: Comparison (fallback) -> skip (handled separately by SMELT)
+      Entry [2]: Aging offset (Tau variable)
+      Entry [3]: Intermittency offset (TempGpcMin variable)
+
     Returns (t0_vmin_coeffs, t0_temp_coeffs, aging_coeffs, intermittency_coeffs).
     """
     t0_vmin_coeffs = ['0', '1', '0']
@@ -355,47 +371,47 @@ def _extract_preserved_equations(raw_text: str) -> Tuple[List[str], List[str], L
     if not raw_text:
         return t0_vmin_coeffs, t0_temp_coeffs, aging_coeffs, intermittency_coeffs
 
-    # Find first Comparison block (T0_Vmin > threshold) and extract inner equations
-    comp_blocks = list(re.finditer(r"'Comparison'\s*=>\s*\{", raw_text))
-    if comp_blocks:
-        from ist_utils import _find_matching_brace
-        first_comp_end = _find_matching_brace(raw_text, comp_blocks[0].end())
-        first_comp_text = raw_text[comp_blocks[0].end():first_comp_end - 1]
+    from ist_utils import iter_top_level_entries
 
-        # Find inner Equation block
-        inner_eq_m = re.search(r"'Equation'\s*=>\s*\[", first_comp_text)
+    # Find the outer Equation array
+    eq_m = re.search(r"'Equation'\s*=>\s*\[", raw_text)
+    if not eq_m:
+        return t0_vmin_coeffs, t0_temp_coeffs, aging_coeffs, intermittency_coeffs
+
+    # Walk the top-level entries sequentially
+    entries = iter_top_level_entries(raw_text, eq_m.end())
+
+    def _extract_coeffs_from_text(text: str) -> List[str]:
+        m = re.search(r"'Coeffs'\s*=>\s*\[([^\]]*)\]", text)
+        return re.findall(r"'([^']*)'", m.group(1)) if m else []
+
+    # Entry [0]: First Comparison block -> T0_Vmin + T0_Temp inner equations
+    if len(entries) >= 1:
+        inner_eq_m = re.search(r"'Equation'\s*=>\s*\[", entries[0])
         if inner_eq_m:
-            inner_text = first_comp_text[inner_eq_m.end():]
-            coeffs_matches = re.findall(r"'Coeffs'\s*=>\s*\[([^\]]*)\]", inner_text)
-            if len(coeffs_matches) >= 1:
-                t0_vmin_coeffs = re.findall(r"'([^']*)'", coeffs_matches[0])
-            if len(coeffs_matches) >= 2:
-                t0_temp_coeffs = re.findall(r"'([^']*)'", coeffs_matches[1])
+            inner_entries = iter_top_level_entries(entries[0], inner_eq_m.end())
+            if len(inner_entries) >= 1:
+                c = _extract_coeffs_from_text(inner_entries[0])
+                if c:
+                    t0_vmin_coeffs = c
+            if len(inner_entries) >= 2:
+                c = _extract_coeffs_from_text(inner_entries[1])
+                if c:
+                    t0_temp_coeffs = c
 
-    # Find non-Comparison equations (aging, intermittency) after the Comparison blocks
-    # These are top-level equation entries with 'Variable' => 'Tau' or 'TempGpcMin'
-    all_coeffs = re.finditer(r"'Coeffs'\s*=>\s*\[([^\]]*)\]", raw_text)
-    all_vars = re.finditer(r"'Variable'\s*=>\s*'([^']*)'", raw_text)
+    # Entry [1]: Second Comparison (fallback) - skip, handled by SMELT
 
-    coeffs_list = [(m.start(), re.findall(r"'([^']*)'", m.group(1))) for m in all_coeffs]
-    vars_list = [(m.start(), m.group(1)) for m in all_vars]
+    # Entry [2]: Aging offset (Tau)
+    if len(entries) >= 3:
+        c = _extract_coeffs_from_text(entries[2])
+        if c:
+            aging_coeffs = c
 
-    for v_pos, v_name in vars_list:
-        matching_coeffs = None
-        for c_pos, c_vals in coeffs_list:
-            if abs(c_pos - v_pos) < 200 and c_pos < v_pos:
-                matching_coeffs = c_vals
-        if matching_coeffs is None:
-            continue
-        if v_name == 'Tau':
-            aging_coeffs = matching_coeffs
-        elif v_name in ('TempGpcMin', 'TempGpcAvg'):
-            # Only take if it's outside the Comparison blocks
-            if comp_blocks and v_pos > comp_blocks[-1].start():
-                from ist_utils import _find_matching_brace
-                last_comp_end = _find_matching_brace(raw_text, comp_blocks[-1].end())
-                if v_pos > last_comp_end:
-                    intermittency_coeffs = matching_coeffs
+    # Entry [3]: Intermittency offset (TempGpcMin)
+    if len(entries) >= 4:
+        c = _extract_coeffs_from_text(entries[3])
+        if c:
+            intermittency_coeffs = c
 
     return t0_vmin_coeffs, t0_temp_coeffs, aging_coeffs, intermittency_coeffs
 
@@ -418,21 +434,21 @@ def _extract_fallback_variable(raw_text: str) -> List[str]:
 
 
 def _extract_intermittency_variable(raw_text: str) -> str:
-    """Extract the variable name used for the intermittency equation."""
-    comp_blocks = list(re.finditer(r"'Comparison'\s*=>\s*\{", raw_text))
-    if not comp_blocks:
+    """Extract the variable name used for the intermittency equation (entry [3])."""
+    from ist_utils import iter_top_level_entries
+
+    eq_m = re.search(r"'Equation'\s*=>\s*\[", raw_text)
+    if not eq_m:
         return 'TempGpcMin'
 
-    from ist_utils import _find_matching_brace
-    last_comp_end = _find_matching_brace(raw_text, comp_blocks[-1].end())
-    after_comps = raw_text[last_comp_end:]
+    entries = iter_top_level_entries(raw_text, eq_m.end())
 
-    # Find the last 'Variable' => 'X' after all Comparison blocks
-    var_matches = list(re.finditer(r"'Variable'\s*=>\s*'([^']*)'", after_comps))
-    if len(var_matches) >= 2:
-        return var_matches[-1].group(1)
-    if len(var_matches) == 1:
-        return var_matches[0].group(1)
+    # Entry [3] is the intermittency offset
+    if len(entries) >= 4:
+        var_m = re.search(r"'Variable'\s*=>\s*'([^']*)'", entries[3])
+        if var_m:
+            return var_m.group(1)
+
     return 'TempGpcMin'
 
 

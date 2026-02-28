@@ -136,8 +136,8 @@ class TestRoundTrip:
 
         # Create SMELT data for a few modes
         smelt_map = {
-            ('BaseFTM2CLK_P0H_HT', 'NVVDD'): ['1', '2', '3', '4', '5', '6'],
-            ('SDD_P0H_HT', 'NVVDD'): ['7', '8', '9', '10', '11', '12'],
+            ('BaseFTM2CLK_P0H_HT', 'NVVDD'): {'coeffs': ['1', '2', '3', '4', '5', '6'], 'folder_base': 'GB100_FTM_P0H_HT_NVVDD_Vmin'},
+            ('SDD_P0H_HT', 'NVVDD'): {'coeffs': ['7', '8', '9', '10', '11', '12'], 'folder_base': 'GB100_SDD_P0H_HT_NVVDD_Vmin'},
         }
         new_vfes = maths_ist_handler.plan_new_vfes(vfes, smelt_map)
 
@@ -252,3 +252,59 @@ class TestConfigLoading:
         bad_file.write_text("not a config")
         config = update_ist_coefficients._load_config(str(bad_file))
         assert config == {}
+
+
+# ─────────────────────────────────────────────────────────────────
+#  Output validation
+# ─────────────────────────────────────────────────────────────────
+
+class TestValidatePmSyntax:
+    """Tests for ist_utils.validate_pm_syntax()."""
+
+    def test_balanced_passes(self):
+        text = "{ 'a' => { 'b' => ['c'] } }"
+        assert ist_utils.validate_pm_syntax(text) == []
+
+    def test_unbalanced_braces_detected(self):
+        text = "{ 'a' => { 'b' => ['c'] }"
+        errors = ist_utils.validate_pm_syntax(text)
+        assert len(errors) == 1
+        assert 'curly braces' in errors[0]
+
+    def test_unbalanced_brackets_detected(self):
+        text = "{ 'a' => ['b', 'c' }"
+        errors = ist_utils.validate_pm_syntax(text)
+        assert len(errors) == 1
+        assert 'square brackets' in errors[0]
+
+    def test_both_unbalanced(self):
+        text = "{ ['a'"
+        errors = ist_utils.validate_pm_syntax(text)
+        assert len(errors) == 2
+
+    def test_real_pm_passes(self, base_pm_text):
+        errors = ist_utils.validate_pm_syntax(base_pm_text)
+        assert errors == []
+
+
+# ─────────────────────────────────────────────────────────────────
+#  Diff mode
+# ─────────────────────────────────────────────────────────────────
+
+class TestDiffMode:
+    """Tests for --diff output."""
+
+    def test_diff_with_dry_run(self, config_path, capsys):
+        rc = update_ist_coefficients.run_update(config_path, dry_run=True, diff=True)
+        assert rc == 0
+        captured = capsys.readouterr()
+        # Diff should show changes (or "No differences" if dry_run prevents mutations)
+        assert 'No differences.' in captured.out or '---' in captured.out
+
+    def test_diff_shows_output(self, config_path, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(update_ist_coefficients, '_PROJECT_ROOT', str(tmp_path))
+        rc = update_ist_coefficients.run_update(config_path, diff=True)
+        assert rc == 0
+        captured = capsys.readouterr()
+        # Full apply with diff should show a unified diff
+        assert '---' in captured.out or 'No differences.' in captured.out

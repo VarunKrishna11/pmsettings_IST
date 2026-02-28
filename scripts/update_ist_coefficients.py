@@ -27,12 +27,16 @@ Workflow:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
+import logging
 import os
 import re
 import sys
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
+
+logger = logging.getLogger(__name__)
 
 from ist_utils import (
     FAMILY_FOLDER_MAP,
@@ -44,6 +48,7 @@ from ist_utils import (
     get_family_smelt_root,
     parse_vfes,
     read_smelt_coefficients,
+    validate_pm_syntax,
 )
 import maths_ist_handler
 import rist_handler
@@ -79,10 +84,9 @@ def build_smelt_map(
     smelt_entries: List[Dict],
     smelt_roots: Dict[str, str],
     family: str,
-    verbose: bool = False,
-) -> Dict[Tuple[str, str], List[str]]:
+) -> Dict[Tuple[str, str], Dict[str, Any]]:
     """
-    Build mapping: (ISTModeName, simplified_rail) -> SMELT coefficients
+    Build mapping: (ISTModeName, simplified_rail) -> {'coeffs': [...], 'folder_base': '...'}
     for a single family.
 
     smelt_roots maps family name -> resolved SMELT_fitting directory.
@@ -91,11 +95,10 @@ def build_smelt_map(
     """
     smelt_root = smelt_roots.get(family, '')
     if not smelt_root or not os.path.isdir(smelt_root):
-        if verbose:
-            print(f"  {family}: no SMELT root directory, skipping coefficient scan")
+        logger.debug("%s: no SMELT root directory, skipping coefficient scan", family)
         return {}
 
-    smelt_map: Dict[Tuple[str, str], List[str]] = {}
+    smelt_map: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
     for entry in smelt_entries:
         entry_family = entry.get('family', '')
@@ -107,28 +110,25 @@ def build_smelt_map(
         rail = detect_rail(folder_base)
 
         if not rail:
-            print(f"  WARNING: Cannot detect rail from '{folder_base}', skipping")
+            logger.warning("Cannot detect rail from '%s', skipping", folder_base)
             continue
 
         coef_path = find_coef_file(smelt_root, folder_base)
         if not coef_path:
-            print(f"  WARNING: No coef file found for '{folder_base}' in {smelt_root}, skipping")
+            logger.warning("No coef file found for '%s' in %s, skipping", folder_base, smelt_root)
             continue
 
         coeffs = read_smelt_coefficients(coef_path)
-        if verbose:
-            print(f"  Read coefficients from {os.path.basename(coef_path)}")
-            print(f"    IST order: [{', '.join(coeffs)}]")
+        logger.debug("Read coefficients from %s", os.path.basename(coef_path))
+        logger.debug("  IST order: [%s]", ', '.join(coeffs))
 
         for mode in ist_modes:
             key = (mode, rail)
             if key not in smelt_map:
-                smelt_map[key] = coeffs
-                if verbose:
-                    print(f"    Mapped: ({mode}, {rail})")
+                smelt_map[key] = {'coeffs': coeffs, 'folder_base': folder_base}
+                logger.debug("  Mapped: (%s, %s)", mode, rail)
             else:
-                if verbose:
-                    print(f"    Skipped duplicate: ({mode}, {rail}) already mapped")
+                logger.debug("  Skipped duplicate: (%s, %s) already mapped", mode, rail)
 
     return smelt_map
 
@@ -156,25 +156,23 @@ def apply_family_update(
     config_name: str,
     family: str,
     new_vfes: List[Dict[str, Any]],
-    verbose: bool = False,
 ) -> str:
     """Replace a family section for a specific config with new VFE blocks."""
     handler = FAMILY_HANDLERS.get(family)
     if not handler:
-        print(f"  ERROR: No handler for family '{family}'")
+        logger.error("No handler for family '%s'", family)
         return file_text
 
     span_start, span_end = find_family_span(file_text, config_name, family)
     if span_start is None:
-        print(f"  WARNING: Could not find {family} section in config '{config_name}'")
+        logger.warning("Could not find %s section in config '%s'", family, config_name)
         return file_text
 
     indent = detect_indent(file_text, config_name, family)
     new_section = handler.generate_section(new_vfes, indent) + ','
 
-    if verbose:
-        print(f"  Replacing {family} in '{config_name}' "
-              f"(chars {span_start}-{span_end}, {len(new_vfes)} VFEs)")
+    logger.debug("Replacing %s in '%s' (chars %d-%d, %d VFEs)",
+                 family, config_name, span_start, span_end, len(new_vfes))
 
     return file_text[:span_start] + new_section + file_text[span_end:]
 
@@ -189,8 +187,7 @@ def _export_to_excel(pm_text: str, xlsx_path: str) -> None:
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
     except ImportError:
-        print("WARNING: openpyxl not installed, skipping Excel export")
-        print("  Install with: pip install openpyxl")
+        logger.warning("openpyxl not installed, skipping Excel export. Install with: pip install openpyxl")
         return
 
     # --- helpers ---
@@ -273,7 +270,7 @@ def _export_to_excel(pm_text: str, xlsx_path: str) -> None:
     # --- build workbook ---
     data_block = _find_block(pm_text, "DataPointers")
     if not data_block:
-        print("WARNING: DataPointers block not found, skipping Excel export")
+        logger.warning("DataPointers block not found, skipping Excel export")
         return
     dp_start, dp_end = data_block
     dp_text = pm_text[dp_start:dp_end]
@@ -387,7 +384,7 @@ def _load_config(config_path: str) -> dict:
         try:
             import openpyxl
         except ImportError:
-            print("ERROR: openpyxl required to read .xlsx config. Install: pip install openpyxl")
+            logger.error("openpyxl required to read .xlsx config. Install: pip install openpyxl")
             return {}
 
         wb = openpyxl.load_workbook(config_path, data_only=True)
@@ -461,18 +458,18 @@ def _load_config(config_path: str) -> dict:
                         groups.append({'ist_modes': modes})
         config['user_groups'] = groups
 
-        print(f"  Loaded config from Excel: {config_path}")
+        logger.info("Loaded config from Excel: %s", config_path)
         return config
 
-    print(f"ERROR: Unsupported config format '{ext}'. Use .json or .xlsx")
+    logger.error("Unsupported config format '%s'. Use .json or .xlsx", ext)
     return {}
 
 
 def run_update(
     config_path: str,
-    verbose: bool = False,
     dry_run: bool = False,
     preview: bool = False,
+    diff: bool = False,
 ) -> int:
     """Apply SMELT coefficient updates based on config file."""
 
@@ -522,115 +519,138 @@ def run_update(
 
     # Validate
     if not os.path.isfile(ist_base_path):
-        print(f"ERROR: Base file not found: {ist_base_path}")
-        print(f"  Paths in config are resolved relative to config dir: {config_dir}")
+        logger.error("Base file not found: %s", ist_base_path)
+        logger.error("  Paths in config are resolved relative to config dir: %s", config_dir)
         return 1
 
     # Filter out entries with empty ist_modes
     valid_entries = [e for e in smelt_entries if e.get('ist_modes')]
     skipped = len(smelt_entries) - len(valid_entries)
     if skipped:
-        print(f"WARNING: Skipping {skipped} entries with empty ist_modes")
+        logger.warning("Skipping %d entries with empty ist_modes", skipped)
 
     mode_label = "PREVIEW" if preview else ("DRY RUN" if dry_run else "APPLY")
-    print(f"Mode:      {mode_label}")
-    print(f"Input:     {ist_base_path}")
+    logger.info("Mode:      %s", mode_label)
+    logger.info("Input:     %s", ist_base_path)
     for fam, root in smelt_roots.items():
-        print(f"SMELT:     {fam} -> {root}")
+        logger.info("SMELT:     %s -> %s", fam, root)
     if not preview and not dry_run:
-        print(f"Output:    {output_folder}/")
-    print(f"Configs:   {target_configs}")
-    print(f"Families:  {target_families}")
-    print(f"Entries:   {len(valid_entries)} SMELT, {len(user_groups)} groups")
-    print()
+        logger.info("Output:    %s/", output_folder)
+    logger.info("Configs:   %s", target_configs)
+    logger.info("Families:  %s", target_families)
+    logger.info("Entries:   %d SMELT, %d groups", len(valid_entries), len(user_groups))
+    logger.info("")
 
     # Read base file
     with open(ist_base_path, 'r', encoding='utf-8') as f:
         file_text = f.read()
+    original_text = file_text
 
     # Build per-family SMELT coefficient maps
-    print("Reading SMELT coefficients...")
+    logger.info("Reading SMELT coefficients...")
     smelt_maps: Dict[str, Dict[Tuple[str, str], List[str]]] = {}
     total_mapped = 0
     for family in target_families:
-        fam_map = build_smelt_map(valid_entries, smelt_roots, family, verbose=verbose)
+        fam_map = build_smelt_map(valid_entries, smelt_roots, family)
         smelt_maps[family] = fam_map
         total_mapped += len(fam_map)
         if fam_map:
-            print(f"  {family}: {len(fam_map)} (mode, rail) pairs")
+            logger.info("  %s: %d (mode, rail) pairs", family, len(fam_map))
         else:
-            print(f"  {family}: no SMELT coefficients (SMELT data may not exist yet)")
+            logger.info("  %s: no SMELT coefficients (SMELT data may not exist yet)", family)
 
-    print(f"  Total: {total_mapped} (mode, rail) pairs\n")
+    logger.info("  Total: %d (mode, rail) pairs\n", total_mapped)
 
     if total_mapped == 0:
-        print("ERROR: No valid SMELT coefficients found across any family. Check config entries.")
+        logger.error("No valid SMELT coefficients found across any family. Check config entries.")
         return 1
 
     # Process each target config x family
     for config_name in target_configs:
-        print(f"Processing config: {config_name}")
+        logger.info("Processing config: %s", config_name)
 
         for family in target_families:
             handler = FAMILY_HANDLERS.get(family)
             if not handler:
-                print(f"  WARNING: No handler for family '{family}', skipping")
+                logger.warning("No handler for family '%s', skipping", family)
                 continue
 
             smelt_map = smelt_maps.get(family, {})
             if not smelt_map:
-                print(f"  {family}: no SMELT data available, skipping")
+                logger.info("  %s: no SMELT data available, skipping", family)
                 continue
 
             existing_vfes = parse_vfes(file_text, config_name, family=family)
             if not existing_vfes:
-                print(f"  {family}: no VFEs found, skipping")
+                logger.info("  %s: no VFEs found, skipping", family)
                 continue
 
             total_modes = sum(len(v['modes']) for v in existing_vfes)
-            print(f"  {family}: {len(existing_vfes)} existing VFEs, {total_modes} mode entries")
+            logger.info("  %s: %d existing VFEs, %d mode entries", family, len(existing_vfes), total_modes)
 
-            new_vfes = handler.plan_new_vfes(existing_vfes, smelt_map, user_groups, verbose=verbose)
+            new_vfes = handler.plan_new_vfes(existing_vfes, smelt_map, user_groups)
 
             smelt_count = sum(1 for v in new_vfes if v['source'] == 'smelt')
             residual_count = sum(1 for v in new_vfes if v['source'] == 'residual')
             original_count = sum(1 for v in new_vfes if v['source'] == 'original')
-            print(f"    -> {len(new_vfes)} VFEs "
-                  f"({smelt_count} SMELT, {residual_count} residual, {original_count} original)")
+            logger.info("    -> %d VFEs (%d SMELT, %d residual, %d original)",
+                        len(new_vfes), smelt_count, residual_count, original_count)
 
             if not dry_run:
-                file_text = apply_family_update(file_text, config_name, family, new_vfes, verbose=verbose)
+                file_text = apply_family_update(file_text, config_name, family, new_vfes)
 
-        print()
+        logger.info("")
 
     # Summary
-    print("=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("SUMMARY")
+    logger.info("=" * 60)
     for config_name in target_configs:
         for family in target_families:
             vfes = parse_vfes(file_text, config_name, family=family)
             if vfes:
-                print(f"\n  {config_name} / {family}:")
+                logger.info("\n  %s / %s:", config_name, family)
                 for v in vfes:
                     rail = classify_rail(v['voltage_domains'])
                     c = v['coeffs']
                     c_short = f"[{c[0]}, ... {c[-1]}]" if len(c) >= 2 else str(c)
-                    print(f"    {v['id']:6s}  {rail:6s}  {v['thermeqtype']:12s}  "
-                          f"modes={len(v['modes'])}  coeffs={c_short}")
+                    logger.info("    %6s  %6s  %12s  modes=%d  coeffs=%s",
+                                v['id'], rail, v['thermeqtype'], len(v['modes']), c_short)
+
+    # ----- Validate output syntax -----
+    if not dry_run:
+        errors = validate_pm_syntax(file_text)
+        if errors:
+            for e in errors:
+                logger.error("Syntax validation: %s", e)
+            return 1
+
+    # ----- Diff output -----
+    if diff:
+        diff_lines = difflib.unified_diff(
+            original_text.splitlines(keepends=True),
+            file_text.splitlines(keepends=True),
+            fromfile='ist_settings.pm (original)',
+            tofile='ist_settings.pm (updated)',
+        )
+        diff_text = ''.join(diff_lines)
+        if diff_text:
+            print(diff_text)
+        else:
+            print("No differences.")
 
     # ----- Preview mode: generate Excel only -----
     if preview:
         preview_xlsx = os.path.join(config_dir, f'ist_settings_preview_{timestamp}.xlsx')
         _export_to_excel(file_text, preview_xlsx)
-        print(f"\n{'=' * 60}")
-        print(f"PREVIEW Excel: {preview_xlsx}")
-        print(f"Review this file. When satisfied, re-run without --preview to generate the .pm file.")
+        logger.info("\n" + "=" * 60)
+        logger.info("PREVIEW Excel: %s", preview_xlsx)
+        logger.info("Review this file. When satisfied, re-run without --preview to generate the .pm file.")
         return 0
 
     # ----- Dry run: no output -----
     if dry_run:
-        print("\nDRY RUN - no output files written")
+        logger.info("\nDRY RUN - no output files written")
         return 0
 
     # ----- Apply mode: create timestamped output folder -----
@@ -639,13 +659,13 @@ def run_update(
     # Write .pm file
     with open(output_pm_path, 'w', encoding='utf-8') as f:
         f.write(file_text)
-    print(f"\nWritten: {output_pm_path}")
+    logger.info("\nWritten: %s", output_pm_path)
 
     # Generate Excel alongside
     _export_to_excel(file_text, output_xlsx_path)
-    print(f"Written: {output_xlsx_path}")
+    logger.info("Written: %s", output_xlsx_path)
 
-    print(f"\nOutput folder: {output_folder}")
+    logger.info("\nOutput folder: %s", output_folder)
     return 0
 
 
@@ -681,13 +701,20 @@ NOTE: Bare names (no path separators) are resolved relative to the project's
     parser.add_argument('--preview', action='store_true',
                         help='Generate Excel preview only (no .pm output). '
                              'Review the Excel, then re-run without --preview to apply.')
+    parser.add_argument('--diff', action='store_true',
+                        help='Show unified diff of changes. Combines with --dry-run.')
 
     args = parser.parse_args()
 
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format='%(message)s',
+    )
+
     return run_update(
         config_path=_in_config_dir(args.config),
-        verbose=args.verbose,
         dry_run=args.dry_run,
+        diff=args.diff,
         preview=args.preview,
     )
 

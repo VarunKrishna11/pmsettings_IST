@@ -12,10 +12,13 @@ for the RIST family. RIST uses:
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
 from ist_utils import classify_rail
+
+logger = logging.getLogger(__name__)
 
 FAMILY = 'RIST'
 
@@ -26,13 +29,13 @@ FAMILY = 'RIST'
 
 def plan_new_vfes(
     existing_vfes: List[Dict[str, Any]],
-    smelt_map: Dict[Tuple[str, str], List[str]],
+    smelt_map: Dict[Tuple[str, str], Any],
     user_groups: List[Dict] = None,
-    verbose: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Plan the new VFE structure for a config's RIST section.
 
+    smelt_map values are dicts: {'coeffs': [...], 'folder_base': '...'}.
     Same split logic as MATHS-IST but without MinMax handling.
     """
     if user_groups is None:
@@ -51,7 +54,7 @@ def plan_new_vfes(
         all_modes = vfe['modes']
 
         remaining: List[str] = []
-        updated: Dict[str, List[str]] = {}
+        updated: Dict[str, Dict[str, Any]] = {}
         for mode in all_modes:
             key = (mode, rail)
             if key in smelt_map:
@@ -69,18 +72,21 @@ def plan_new_vfes(
                 'source': 'original',
                 'equation_type': 'simple',
             })
-            if verbose:
-                print(f"    RIST VFE kept original: {len(all_modes)} modes on {rail}")
+            logger.debug("RIST VFE kept original: %d modes on %s", len(all_modes), rail)
             continue
 
         coeff_groups: Dict[Any, List[str]] = defaultdict(list)
-        for mode, coeffs in updated.items():
+        folder_for_group: Dict[Any, str] = {}
+        for mode, entry in updated.items():
+            coeffs = entry['coeffs']
             group = mode_to_group.get(mode)
             if group:
                 group_key = (tuple(coeffs), group)
             else:
                 group_key = (tuple(coeffs), frozenset([mode]))
             coeff_groups[group_key].append(mode)
+            if group_key not in folder_for_group:
+                folder_for_group[group_key] = entry['folder_base']
 
         for (coeffs_tuple, group_set), group_modes in coeff_groups.items():
             final_modes = list(group_modes)
@@ -103,10 +109,10 @@ def plan_new_vfes(
                 'variable': vfe['variable'],
                 'coeffs': list(coeffs_tuple),
                 'source': 'smelt',
+                'smelt_folder': folder_for_group[(coeffs_tuple, group_set)],
                 'equation_type': 'simple',
             })
-            if verbose:
-                print(f"    RIST VFE SMELT: modes={final_modes} rail={rail}")
+            logger.debug("RIST VFE SMELT: modes=%s rail=%s", final_modes, rail)
 
         if remaining:
             new_vfes.append({
@@ -118,8 +124,7 @@ def plan_new_vfes(
                 'source': 'residual',
                 'equation_type': 'simple',
             })
-            if verbose:
-                print(f"    RIST VFE residual: {len(remaining)} modes on {rail}")
+            logger.debug("RIST VFE residual: %d modes on %s", len(remaining), rail)
 
     return new_vfes
 
@@ -128,11 +133,12 @@ def plan_new_vfes(
 #  Perl Text Generation
 # ─────────────────────────────────────────────────────────────────
 
-def _format_coeffs(coeffs: List[str], source: str = '') -> str:
+def _format_coeffs(coeffs: List[str], source: str = '', folder_base: str = '') -> str:
     formatted = '[' + ','.join(f"'{c}'" for c in coeffs) + ']'
     if len(coeffs) == 6:
         if source == 'smelt':
-            formatted += ', #SMELT C5, C4, C3, C2, C1, C0'
+            tag = f'#SMELT({folder_base}) ' if folder_base else '#SMELT '
+            formatted += f', {tag}C5, C4, C3, C2, C1, C0'
         else:
             formatted += ', #C5, C4, C3, C2, C1, C0'
     return formatted
@@ -147,7 +153,8 @@ def generate_vfe_block(vfe_id: str, vfe: Dict[str, Any], indent: str) -> str:
 
     modes_str = ', '.join(f"'{m}'" for m in vfe['modes'])
     vd_str = ', '.join(f"'{v}'" for v in vfe['voltage_domains'])
-    coeffs_str = _format_coeffs(vfe['coeffs'], source=vfe.get('source', ''))
+    folder_base = vfe.get('smelt_folder', '')
+    coeffs_str = _format_coeffs(vfe['coeffs'], source=vfe.get('source', ''), folder_base=folder_base)
 
     var = vfe['variable']
     if len(var) == 1:

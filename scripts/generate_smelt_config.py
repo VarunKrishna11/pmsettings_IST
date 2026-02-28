@@ -24,10 +24,13 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import logging
 import os
 import re
 import sys
 from typing import Dict, List
+
+logger = logging.getLogger(__name__)
 
 from ist_utils import (
     FAMILY_FOLDER_MAP,
@@ -120,7 +123,7 @@ def load_xlsx_mode_names(xlsx_path: str, families: List[str] = None) -> Dict[str
     try:
         import openpyxl
     except ImportError:
-        print("WARNING: openpyxl not installed, cannot read xlsx. Using base file modes only.")
+        logger.warning("openpyxl not installed, cannot read xlsx. Using base file modes only.")
         return {}
 
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
@@ -204,9 +207,9 @@ def generate_config(
         for fam in families:
             count = len(modes_by_family.get(fam, []))
             if count:
-                print(f"  Found {count} {fam} modes from base file")
+                logger.info("  Found %d %s modes from base file", count, fam)
     else:
-        print(f"  WARNING: ist_base not found: {ist_base}")
+        logger.warning("ist_base not found: %s", ist_base)
 
     if xlsx_path and os.path.isfile(xlsx_path):
         xlsx_modes_by_fam = load_xlsx_mode_names(xlsx_path, families)
@@ -216,16 +219,16 @@ def generate_config(
                 if m not in all_modes:
                     all_modes.append(m)
                     added += 1
-            print(f"  Found {len(fam_xlsx_modes)} modes from xlsx {fam} (+{added} new)")
+            logger.info("  Found %d modes from xlsx %s (+%d new)", len(fam_xlsx_modes), fam, added)
 
-    print(f"  Total unique modes across families: {len(all_modes)}")
+    logger.info("  Total unique modes across families: %d", len(all_modes))
 
     # Scan per-family SMELT folders
     entries = []
     for fam in families:
         fam_smelt_root = get_family_smelt_root(_INPUT_DIR, fam)
         if not os.path.isdir(fam_smelt_root):
-            print(f"  {fam}: no SMELT folder at {fam_smelt_root}, skipping")
+            logger.info("  %s: no SMELT folder at %s, skipping", fam, fam_smelt_root)
             continue
 
         fam_modes = modes_by_family.get(fam, [])
@@ -274,7 +277,8 @@ def generate_config(
             entries.append(entry)
             fam_entry_count += 1
 
-        print(f"  {fam}: scanned {fam_entry_count} SMELT folders from {FAMILY_FOLDER_MAP.get(fam, fam)}/SMELT_fitting/")
+        logger.info("  %s: scanned %d SMELT folders from %s/SMELT_fitting/",
+                    fam, fam_entry_count, FAMILY_FOLDER_MAP.get(fam, fam))
 
     # Detect target configs from base file
     target_configs = []
@@ -344,19 +348,19 @@ def generate_config(
     xlsx_output = os.path.splitext(output_path)[0] + '.xlsx'
     _export_config_to_xlsx(config, xlsx_output)
 
-    print(f"\nGenerated config:")
-    print(f"  JSON:  {output_path}")
-    print(f"  Excel: {xlsx_output}")
-    print(f"  SMELT entries: {len(entries)}")
+    logger.info("\nGenerated config:")
+    logger.info("  JSON:  %s", output_path)
+    logger.info("  Excel: %s", xlsx_output)
+    logger.info("  SMELT entries: %d", len(entries))
     auto_ok = sum(1 for e in entries if e.get('ist_modes'))
     need_review = sum(1 for e in entries if not e.get('ist_modes'))
-    print(f"  Auto-matched: {auto_ok}")
-    print(f"  Need review:  {need_review}")
+    logger.info("  Auto-matched: %d", auto_ok)
+    logger.info("  Need review:  %d", need_review)
     if need_review:
-        print("\n  Please review entries with empty ist_modes[] and fill them in.")
-    print(f"\n  Edit either file, then run:")
-    print(f"    python scripts/update_ist_coefficients.py --config {output_path}")
-    print(f"    python scripts/update_ist_coefficients.py --config {xlsx_output}")
+        logger.info("\n  Please review entries with empty ist_modes[] and fill them in.")
+    logger.info("\n  Edit either file, then run:")
+    logger.info("    python scripts/update_ist_coefficients.py --config %s", output_path)
+    logger.info("    python scripts/update_ist_coefficients.py --config %s", xlsx_output)
     return 0
 
 
@@ -366,7 +370,7 @@ def _export_config_to_xlsx(config: dict, xlsx_path: str) -> None:
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
     except ImportError:
-        print("WARNING: openpyxl not installed, skipping Excel config export")
+        logger.warning("openpyxl not installed, skipping Excel config export")
         return
 
     wb = openpyxl.Workbook()
@@ -501,11 +505,16 @@ NOTE: Bare names (no path separators) are resolved relative to the project's
 
     args = parser.parse_args()
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(message)s',
+    )
+
     families = args.family
     if families:
         for f in families:
             if f not in SUPPORTED_FAMILIES:
-                print(f"ERROR: Unknown family '{f}'. Supported: {SUPPORTED_FAMILIES}")
+                logger.error("Unknown family '%s'. Supported: %s", f, SUPPORTED_FAMILIES)
                 return 1
 
     return generate_config(

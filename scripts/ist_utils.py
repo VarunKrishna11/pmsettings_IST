@@ -14,9 +14,12 @@ Supported families: MATHS-IST, RIST, RIST-Adaptive
 from __future__ import annotations
 
 import glob
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────
 #  Rail Detection
@@ -329,6 +332,56 @@ def find_family_span(file_text: str, config_name: str, family: str = 'MATHS-IST'
         section_end += rest.index(',') + 1
 
     return section_start, section_end
+
+
+# ─────────────────────────────────────────────────────────────────
+#  Sequential Entry Walker
+# ─────────────────────────────────────────────────────────────────
+
+def iter_top_level_entries(text: str, start: int = 0) -> List[str]:
+    """
+    Walk brace-balanced { ... } entries sequentially from start position.
+    Returns a list of entry texts (content between { and }).
+
+    For an Equation array like: [ { ... }, { ... }, { ... }, { ... } ]
+    this returns the content of each { ... } block in order.
+    """
+    entries: List[str] = []
+    pos = start
+    while pos < len(text):
+        # Find next opening brace
+        idx = text.find('{', pos)
+        if idx == -1:
+            break
+        content_start = idx + 1
+        end = _find_matching_brace(text, content_start)
+        entries.append(text[content_start:end - 1])
+        pos = end
+    return entries
+
+
+# ─────────────────────────────────────────────────────────────────
+#  Output Validation
+# ─────────────────────────────────────────────────────────────────
+
+def validate_pm_syntax(text: str) -> List[str]:
+    """
+    Validate basic .pm syntax: balanced braces and brackets.
+    Returns a list of error strings (empty = valid).
+    """
+    errors: List[str] = []
+
+    open_braces = text.count('{')
+    close_braces = text.count('}')
+    if open_braces != close_braces:
+        errors.append(f"Unbalanced curly braces: {open_braces} open vs {close_braces} close")
+
+    open_brackets = text.count('[')
+    close_brackets = text.count(']')
+    if open_brackets != close_brackets:
+        errors.append(f"Unbalanced square brackets: {open_brackets} open vs {close_brackets} close")
+
+    return errors
 
 
 # Backward-compatible aliases
