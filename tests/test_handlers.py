@@ -83,6 +83,66 @@ class TestMathsIstPlanNewVfes:
         assert len(result) == 1
         assert set(result[0]['modes']) == {'ModeA', 'ModeB'}
 
+    def test_different_coeffs_merged_by_user_group(self):
+        """User groups force-merge modes even with different SMELT coefficients."""
+        vfe = self._make_vfe(['ModeA', 'ModeB'], ['NVVDDI_0', 'NVVDDI_1'])
+        smelt_map = {
+            ('ModeA', 'NVVDD'): {'coeffs': ['1', '2', '3', '4', '5', '6'], 'folder_base': 'GB100_FTM_NVVDD'},
+            ('ModeB', 'NVVDD'): {'coeffs': ['7', '8', '9', '10', '11', '12'], 'folder_base': 'GB100_SDD_NVVDD'},
+        }
+        user_groups = [{'ist_modes': ['ModeA', 'ModeB']}]
+        result = maths_ist_handler.plan_new_vfes([vfe], smelt_map, user_groups)
+        # Both modes merged into one VFE using first mode's coefficients
+        assert len(result) == 1
+        assert set(result[0]['modes']) == {'ModeA', 'ModeB'}
+        assert result[0]['coeffs'] == ['1', '2', '3', '4', '5', '6']
+
+    def test_multiple_user_groups(self):
+        """Multiple user_groups create separate merged VFEs."""
+        vfe = self._make_vfe(
+            ['ModeA', 'ModeB', 'ModeC', 'ModeD'],
+            ['NVVDDI_0', 'NVVDDI_1'],
+        )
+        smelt_map = {
+            ('ModeA', 'NVVDD'): {'coeffs': ['1', '2', '3', '4', '5', '6'], 'folder_base': 'GB100_FTM_NVVDD'},
+            ('ModeB', 'NVVDD'): {'coeffs': ['7', '8', '9', '10', '11', '12'], 'folder_base': 'GB100_SDD_NVVDD'},
+            ('ModeC', 'NVVDD'): {'coeffs': ['13', '14', '15', '16', '17', '18'], 'folder_base': 'GB100_MBIST_NVVDD'},
+            ('ModeD', 'NVVDD'): {'coeffs': ['19', '20', '21', '22', '23', '24'], 'folder_base': 'GB100_CAD_NVVDD'},
+        }
+        user_groups = [
+            {'ist_modes': ['ModeA', 'ModeB']},
+            {'ist_modes': ['ModeC', 'ModeD']},
+        ]
+        result = maths_ist_handler.plan_new_vfes([vfe], smelt_map, user_groups)
+        # Two groups → two VFEs
+        assert len(result) == 2
+        modes_per_vfe = [set(v['modes']) for v in result]
+        assert {'ModeA', 'ModeB'} in modes_per_vfe
+        assert {'ModeC', 'ModeD'} in modes_per_vfe
+        # Each uses first mode's coefficients
+        for v in result:
+            if 'ModeA' in v['modes']:
+                assert v['coeffs'] == ['1', '2', '3', '4', '5', '6']
+            if 'ModeC' in v['modes']:
+                assert v['coeffs'] == ['13', '14', '15', '16', '17', '18']
+
+    def test_user_group_pulls_non_smelt_modes(self):
+        """User group pulls non-SMELT modes from residual into the group's VFE."""
+        vfe = self._make_vfe(['ModeA', 'ModeB', 'ModeC'], ['NVVDDI_0', 'NVVDDI_1'])
+        smelt_map = {
+            ('ModeA', 'NVVDD'): {'coeffs': ['1', '2', '3', '4', '5', '6'], 'folder_base': 'GB100_FTM_NVVDD'},
+            # ModeB has no SMELT data, ModeC has no SMELT data
+        }
+        user_groups = [{'ist_modes': ['ModeA', 'ModeB']}]
+        result = maths_ist_handler.plan_new_vfes([vfe], smelt_map, user_groups)
+        # ModeA (SMELT) + ModeB (pulled from residual) in one VFE, ModeC in residual
+        smelt_vfes = [v for v in result if v['source'] == 'smelt']
+        residual_vfes = [v for v in result if v['source'] == 'residual']
+        assert len(smelt_vfes) == 1
+        assert set(smelt_vfes[0]['modes']) == {'ModeA', 'ModeB'}
+        assert len(residual_vfes) == 1
+        assert residual_vfes[0]['modes'] == ['ModeC']
+
     def test_minmax_sysvdd_updates_operands(self):
         """MinMax SYSVDD VFE with SYSNVDD/SYSSVDD SMELT data."""
         vfe = self._make_vfe(['ModeA'], ['SYSVDDI'], eq_type='minmax')

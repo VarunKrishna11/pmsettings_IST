@@ -124,18 +124,26 @@ def plan_new_vfes(
 
         coeff_groups: Dict[Any, List[str]] = defaultdict(list)
         folder_for_group: Dict[Any, str] = {}
+        coeffs_for_group: Dict[Any, tuple] = {}
         for mode, entry in updated.items():
             coeffs = entry['coeffs']
             group = mode_to_group.get(mode)
             if group:
-                group_key = (tuple(coeffs), group)
+                group_key = group  # user_group wins: merge regardless of coefficients
             else:
                 group_key = (tuple(coeffs), frozenset([mode]))
             coeff_groups[group_key].append(mode)
             if group_key not in folder_for_group:
                 folder_for_group[group_key] = entry['folder_base']
+            if group_key not in coeffs_for_group:
+                coeffs_for_group[group_key] = tuple(coeffs)
 
-        for (coeffs_tuple, group_set), group_modes in coeff_groups.items():
+        for gk, group_modes in coeff_groups.items():
+            if isinstance(gk, frozenset):
+                coeffs_tuple = coeffs_for_group[gk]
+                group_set = gk
+            else:
+                coeffs_tuple, group_set = gk
             final_modes = list(group_modes)
             pulled_from_remaining = []
             for mode in group_modes:
@@ -156,7 +164,7 @@ def plan_new_vfes(
                 'variable': vfe['variable'],
                 'coeffs': list(coeffs_tuple),
                 'source': 'smelt',
-                'smelt_folder': folder_for_group[(coeffs_tuple, group_set)],
+                'smelt_folder': folder_for_group[gk],
                 'equation_type': 'comparison',
                 'raw_text': raw_text,
                 'fallback_coeffs': list(coeffs_tuple),

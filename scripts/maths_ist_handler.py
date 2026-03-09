@@ -105,13 +105,23 @@ def plan_new_vfes(
                 continue
 
             coeff_groups: Dict[Any, List[str]] = defaultdict(list)
+            coeffs_for_group: Dict[Any, Tuple] = {}
             for mode, per_op in updated_mm.items():
                 group = mode_to_group.get(mode)
-                gk = (tuple(per_op[0]), tuple(per_op[1]),
-                      group if group else frozenset([mode]))
+                if group:
+                    gk = group  # user_group wins: merge regardless of coefficients
+                else:
+                    gk = (tuple(per_op[0]), tuple(per_op[1]), frozenset([mode]))
                 coeff_groups[gk].append(mode)
+                if gk not in coeffs_for_group:
+                    coeffs_for_group[gk] = (tuple(per_op[0]), tuple(per_op[1]))
 
-            for (n_tup, s_tup, group_set), group_modes in coeff_groups.items():
+            for gk, group_modes in coeff_groups.items():
+                if isinstance(gk, frozenset):
+                    n_tup, s_tup = coeffs_for_group[gk]
+                    group_set = gk
+                else:
+                    n_tup, s_tup, group_set = gk
                 final_modes = list(group_modes)
                 pulled_from_remaining = []
                 for mode in group_modes:
@@ -176,18 +186,26 @@ def plan_new_vfes(
 
             coeff_groups: Dict[Any, List[str]] = defaultdict(list)
             folder_for_group: Dict[Any, str] = {}
+            coeffs_for_group: Dict[Any, tuple] = {}
             for mode, entry in updated.items():
                 coeffs = entry['coeffs']
                 group = mode_to_group.get(mode)
                 if group:
-                    group_key = (tuple(coeffs), group)
+                    group_key = group  # user_group wins: merge regardless of coefficients
                 else:
                     group_key = (tuple(coeffs), frozenset([mode]))
                 coeff_groups[group_key].append(mode)
                 if group_key not in folder_for_group:
                     folder_for_group[group_key] = entry['folder_base']
+                if group_key not in coeffs_for_group:
+                    coeffs_for_group[group_key] = tuple(coeffs)
 
-            for (coeffs_tuple, group_set), group_modes in coeff_groups.items():
+            for gk, group_modes in coeff_groups.items():
+                if isinstance(gk, frozenset):
+                    coeffs_tuple = coeffs_for_group[gk]
+                    group_set = gk
+                else:
+                    coeffs_tuple, group_set = gk
                 final_modes = list(group_modes)
                 pulled_from_remaining = []
                 for mode in group_modes:
@@ -208,7 +226,7 @@ def plan_new_vfes(
                     'variable': vfe['variable'],
                     'coeffs': list(coeffs_tuple),
                     'source': 'smelt',
-                    'smelt_folder': folder_for_group[(coeffs_tuple, group_set)],
+                    'smelt_folder': folder_for_group[gk],
                     **mm,
                 })
                 logger.debug("VFE SMELT: modes=%s rail=%s coeffs=[%s...]",
